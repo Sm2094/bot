@@ -1,4 +1,4 @@
-const whatWeDo = require("../bot/whatWeDo.js")
+const whatWeDo = require("../bot/whatWeDo.js");
 
 function handleOrder(message) {
 
