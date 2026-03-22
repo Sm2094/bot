@@ -16,38 +16,31 @@ const refreshToken = require("./refreshToken");
 
 
   // 🔥 GLOBAL TOKEN (SAFE)
-let META_TOKEN = process.env.META_TOKEN;
+let META_TOKEN = process.env.META_TOKEN || null;
 
 async function ensureToken() {
   try {
-    console.log("🔍 Current META_TOKEN:", META_TOKEN);
-
     if (!META_TOKEN || META_TOKEN.length < 50) {
       console.log("⚠️ No valid META_TOKEN, refreshing...");
-
       const newToken = await refreshToken();
 
-      console.log("🧪 New token received:", newToken);
-
       if (newToken && newToken.length > 50) {
-        META_TOKEN = newToken;
+        META_TOKEN = newToken; // store in memory
         console.log("✅ Token stored in memory");
       } else {
-        console.log("❌ Invalid token returned");
+        console.log("❌ Failed to get valid token");
       }
-
     } else {
-      console.log("✅ META_TOKEN is valid, skipping refresh");
+      console.log("✅ META_TOKEN exists in memory");
     }
-
   } catch (err) {
     console.error("❌ Token check failed:", err.message);
   }
 }
 
-
-
-
+  function getToken() {
+  return META_TOKEN;
+}
 
 const app = express();
 app.use(express.json());
@@ -203,4 +196,6 @@ app.listen(PORT, async () => {
 
   // 🔥 Auto-check token on startup
   await ensureToken();
+
+  console.log("Current META_TOKEN:", getToken());
 });
