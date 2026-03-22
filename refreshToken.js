@@ -18,16 +18,7 @@ async function refreshToken() {
     console.log("✅ New long-lived token:", newToken);
 
     // Update .env automatically
-    const envPath = path.resolve(__dirname, ".env");
-    let envContent = fs.readFileSync(envPath, "utf-8");
-
-    if (envContent.includes("META_TOKEN=")) {
-      envContent = envContent.replace(/META_TOKEN=.*/, `META_TOKEN=${newToken}`);
-    } else {
-      envContent += `\nMETA_TOKEN=${newToken}\n`;
-    }
-
-    fs.writeFileSync(envPath, envContent);
+    
     console.log("✅ .env updated with new META_TOKEN");
 
     return newToken;
