@@ -17,7 +17,6 @@ async function refreshToken() {
 
     console.log("✅ New long-lived token:", newToken);
 
-    // Update .env automatically
     
     console.log("✅ .env updated with new META_TOKEN");
 

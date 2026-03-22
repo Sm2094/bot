@@ -45,28 +45,7 @@ async function ensureToken() {
   }
 }
 
-let isRefreshing = false;
 
-setInterval(async () => {
-  if (isRefreshing) return;
-
-  try {
-    isRefreshing = true;
-    console.log("🔄 Auto refreshing token...");
-
-    const newToken = await refreshToken();
-
-    if (newToken && newToken.length > 50) {
-      META_TOKEN = newToken;
-      console.log("✅ Token auto-refreshed");
-    }
-
-  } catch (err) {
-    console.error("❌ Auto refresh failed:", err.message);
-  } finally {
-    isRefreshing = false;
-  }
-}, 1000 * 60 * 60 * 24 * 50);
 
 
 
