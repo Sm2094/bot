@@ -7,6 +7,12 @@ const axios = require("axios");
  * @param {string} text - message text
  * @param {string} token - current long-lived token
  */
+
+console.log("➡️ Sending message to:", to);
+console.log("➡️ Message body:", text);
+console.log("➡️ Using token:", token.slice(0, 10) + "...");
+
+
 async function sendMessage(to, text, token) {
   if (!token) {
     console.error("❌ sendMessage failed: no META_TOKEN provided");
