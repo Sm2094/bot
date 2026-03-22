@@ -1,200 +1,41 @@
-  require("dotenv").config();
-  const express = require("express");
-  const sendMessage = require("./utils/sendMessage.js");
+// server.js
+require("dotenv").config();
+const express = require("express");
+const sendMessage = require("./utils/sendMessage.js");
 
-  const processedMessages = new Set();
+// Use your long-lived token here for now
+const META_TOKEN = process.env.META_TOKEN || "PASTE_YOUR_LONG_LIVED_TOKEN_HERE";
 
-  const handleMenu = require("./handlers/menuHandler.js");
-  const detectIntent = require("./sales/detectIntent.js");
-  const aiReply = require("./AI/aiResponder.js");
+const app = express();
+app.use(express.json());
 
-  const { scheduleFollowUp, cancelFollowUp } = require("./features/followUpScheduler.js");
+// Health check
+app.get("/", (req, res) => res.send("WhatsApp Bot running 🚀"));
 
-  const sellers = require("./data/sellers.js");
-  const { setSeller, getSeller } = require("./memory/customerMemory.js");
-  const refreshToken = require("./refreshToken");
+// Webhook
+app.post("/webhook", async (req, res) => {
+  try {
+    const messages = req.body.entry?.[0]?.changes?.[0]?.value?.messages;
+    if (!messages || messages.length === 0) return res.sendStatus(200);
 
+    const messageObj = messages[0];
+    const from = messageObj.from;
+    let text;
 
-    // 🔥 GLOBAL TOKEN (SAFE)
-  let META_TOKEN = process.env.META_TOKEN || null;
+    if (messageObj.type === "text") text = messageObj.text.body;
+    else return res.sendStatus(200);
 
-    async function ensureToken() {
-  if (!META_TOKEN || META_TOKEN.length < 50) {
-    console.log("⚠️ Refreshing META_TOKEN...");
-    const newToken = await refreshToken();
-    if (newToken && newToken.length > 50) {
-      META_TOKEN = newToken;
-      console.log("✅ META_TOKEN stored in memory:", META_TOKEN.slice(0, 10) + "...");
-    } else {
-      console.error("❌ Could not get a valid token");
-    }
-  } else {
-    console.log("✅ META_TOKEN exists in memory");
+    console.log("📩 Incoming message from", from, ":", text);
+
+    // Respond immediately
+    await sendMessage(from, `You said: "${text}"`, META_TOKEN);
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook error:", err.response?.data || err.message);
+    res.sendStatus(500);
   }
-}
+});
 
-
-    function getToken() {
-    return META_TOKEN;
-  }
-
-  const app = express();
-  app.use(express.json());
-
-  // Health check
-  app.get("/", (req, res) => {
-    res.send("WhatsApp Bot is running 🚀");
-  });
-
-  // Webhook
-  app.post("/webhook", async (req, res) => {
-    try {
-      const value = req.body.entry?.[0]?.changes?.[0]?.value;
-
-      if (!value.messages) return res.sendStatus(200);
-
-      const messages = value.messages;
-      if (!messages || messages.length === 0) {
-        return res.sendStatus(200);
-      }
-
-      const messageObj = messages[0];
-      const from = messageObj.from;
-      const messageId = messageObj.id;
-
-      
-      if (processedMessages.has(messageId)) {
-        return res.sendStatus(200);
-      }
-
-      processedMessages.add(messageId);
-      setTimeout(() => processedMessages.delete(messageId), 300000);
-
-      // Extract Text
-      let text = null;
-
-      if (messageObj.type === "text") {
-        text = messageObj.text.body;
-      }
-
-      if (messageObj.type === "button") {
-        text = messageObj.button.text;
-      }
-
-      if (messageObj.type === "interactive") {
-        text =
-          messageObj.interactive?.button_reply?.title ||
-          messageObj.interactive?.list_reply?.title;
-      }
-
-      console.log("📩 Incoming message:", messageObj);
-
-      if (!text || text.trim() === "") {
-        console.log("⚠️ Message ignored: empty or unsupported type");
-        return res.sendStatus(200);
-      }
-
-      // Respond fast
-      res.sendStatus(200);
-
-      const input = text.toLowerCase();
-
-      // =========================
-      // 🏪 STORE SELECTION
-      // =========================
-      if (!getSeller(from)) {
-
-        // Greeting → show stores
-        if (["hi", "hello"].includes(input)) {
-          const storeList = Object.values(sellers)
-            .map(s => `• ${s.name}`)
-            .join("\n");
-
-          return await sendMessage(
-            from,
-            `Welcome 👋\nChoose a store:\n${storeList}`
-          );
-        }
-
-        // Try match store
-        const sellerKey = Object.keys(sellers).find(key => {
-          const seller = sellers[key];
-
-          return (
-            key.toLowerCase() === input ||
-            seller.name.toLowerCase().includes(input)
-          );
-        });
-
-        // If found → set seller
-        if (sellerKey) {
-          setSeller(from, sellerKey);
-
-          return await sendMessage(
-            from,
-            `Welcome to ${sellers[sellerKey].name} 😎`
-          );
-        }
-
-        // Not found → show stores again
-        const storeList = Object.values(sellers)
-          .map(s => `• ${s.name}`)
-          .join("\n");
-
-        return await sendMessage(
-          from,
-          `Type a store name:\n${storeList}`
-        );
-      }
-
-      // =========================
-      // 🤖 NORMAL BOT FLOW
-      // =========================
-
-      const sellerId = getSeller(from);
-      const seller = sellers[sellerId];
-
-      let reply = null;
-
-      // Cancel follow-up if user replies
-      cancelFollowUp(from);
-
-      // Menu
-      reply = handleMenu(text, seller);
-
-      // Intent
-      if (!reply) {
-        const intent = detectIntent(text);
-
-        if (intent === "BUY") {
-          reply = "🔥 Nice choice! What product are you interested in?";
-          scheduleFollowUp(from, "our products");
-        }
-
-        if (intent === "PRICE") {
-          reply = "💰 Sure! Which product do you want the price for?";
-        }
-      }
-
-      // AI fallback
-      if (!reply) {
-        reply = await aiReply(text, seller);
-      }
-
-      await sendMessage(from, reply, getToken());
-
-    } catch (err) {
-      console.error("Webhook error:", err.response?.data || err.message);
-    }
-  });
-
-  const PORT = 5000;
-
-  app.listen(PORT, async () => {
-    console.log(`Server running on port ${PORT} 🚀`);
-
-    // 🔥 Auto-check token on startup
-    await ensureToken();
-
-    console.log("Current META_TOKEN:", getToken());
-  });
+const PORT = 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT} 🚀`));
