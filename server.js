@@ -1,201 +1,201 @@
-require("dotenv").config();
-const express = require("express");
-const sendMessage = require("./utils/sendMessage.js");
+  require("dotenv").config();
+  const express = require("express");
+  const sendMessage = require("./utils/sendMessage.js");
 
-const processedMessages = new Set();
+  const processedMessages = new Set();
 
-const handleMenu = require("./handlers/menuHandler.js");
-const detectIntent = require("./sales/detectIntent.js");
-const aiReply = require("./AI/aiResponder.js");
+  const handleMenu = require("./handlers/menuHandler.js");
+  const detectIntent = require("./sales/detectIntent.js");
+  const aiReply = require("./AI/aiResponder.js");
 
-const { scheduleFollowUp, cancelFollowUp } = require("./features/followUpScheduler.js");
+  const { scheduleFollowUp, cancelFollowUp } = require("./features/followUpScheduler.js");
 
-const sellers = require("./data/sellers.js");
-const { setSeller, getSeller } = require("./memory/customerMemory.js");
-const refreshToken = require("./refreshToken");
+  const sellers = require("./data/sellers.js");
+  const { setSeller, getSeller } = require("./memory/customerMemory.js");
+  const refreshToken = require("./refreshToken");
 
 
-  // 🔥 GLOBAL TOKEN (SAFE)
-let META_TOKEN = process.env.META_TOKEN || null;
+    // 🔥 GLOBAL TOKEN (SAFE)
+  let META_TOKEN = process.env.META_TOKEN || null;
 
-async function ensureToken() {
-  try {
-    if (!META_TOKEN || META_TOKEN.length < 50) {
-      console.log("⚠️ No valid META_TOKEN, refreshing...");
-      const newToken = await refreshToken();
+  async function ensureToken() {
+    try {
+      if (!META_TOKEN || META_TOKEN.length < 50) {
+        console.log("⚠️ No valid META_TOKEN, refreshing...");
+        const newToken = await refreshToken();
 
-      if (newToken && newToken.length > 50) {
-        META_TOKEN = newToken; // store in memory
-        console.log("✅ Token stored in memory");
+        if (newToken && newToken.length > 50) {
+          META_TOKEN = newToken; // store in memory
+          console.log("✅ Token stored in memory");
+        } else {
+          console.log("❌ Failed to get valid token");
+        }
       } else {
-        console.log("❌ Failed to get valid token");
+        console.log("✅ META_TOKEN exists in memory");
       }
-    } else {
-      console.log("✅ META_TOKEN exists in memory");
+    } catch (err) {
+      console.error("❌ Token check failed:", err.message);
     }
-  } catch (err) {
-    console.error("❌ Token check failed:", err.message);
   }
-}
 
-  function getToken() {
-  return META_TOKEN;
-}
+    function getToken() {
+    return META_TOKEN;
+  }
 
-const app = express();
-app.use(express.json());
+  const app = express();
+  app.use(express.json());
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("WhatsApp Bot is running 🚀");
-});
+  // Health check
+  app.get("/", (req, res) => {
+    res.send("WhatsApp Bot is running 🚀");
+  });
 
-// Webhook
-app.post("/webhook", async (req, res) => {
-  try {
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
+  // Webhook
+  app.post("/webhook", async (req, res) => {
+    try {
+      const value = req.body.entry?.[0]?.changes?.[0]?.value;
 
-    if (!value.messages) return res.sendStatus(200);
+      if (!value.messages) return res.sendStatus(200);
 
-    const messages = value.messages;
-    if (!messages || messages.length === 0) {
-      return res.sendStatus(200);
-    }
+      const messages = value.messages;
+      if (!messages || messages.length === 0) {
+        return res.sendStatus(200);
+      }
 
-    const messageObj = messages[0];
-    const from = messageObj.from;
-    const messageId = messageObj.id;
+      const messageObj = messages[0];
+      const from = messageObj.from;
+      const messageId = messageObj.id;
 
-    
-    if (processedMessages.has(messageId)) {
-      return res.sendStatus(200);
-    }
+      
+      if (processedMessages.has(messageId)) {
+        return res.sendStatus(200);
+      }
 
-    processedMessages.add(messageId);
-    setTimeout(() => processedMessages.delete(messageId), 300000);
+      processedMessages.add(messageId);
+      setTimeout(() => processedMessages.delete(messageId), 300000);
 
-    // Extract text
-    let text = null;
+      // Extract text
+      let text = null;
 
-    if (messageObj.type === "text") {
-      text = messageObj.text.body;
-    }
+      if (messageObj.type === "text") {
+        text = messageObj.text.body;
+      }
 
-    if (messageObj.type === "button") {
-      text = messageObj.button.text;
-    }
+      if (messageObj.type === "button") {
+        text = messageObj.button.text;
+      }
 
-    if (messageObj.type === "interactive") {
-      text =
-        messageObj.interactive?.button_reply?.title ||
-        messageObj.interactive?.list_reply?.title;
-    }
+      if (messageObj.type === "interactive") {
+        text =
+          messageObj.interactive?.button_reply?.title ||
+          messageObj.interactive?.list_reply?.title;
+      }
 
-    if (!text || text.trim() === "") {
-      return res.sendStatus(200);
-    }
+      if (!text || text.trim() === "") {
+        return res.sendStatus(200);
+      }
 
-    // Respond fast
-    res.sendStatus(200);
+      // Respond fast
+      res.sendStatus(200);
 
-    const input = text.toLowerCase();
+      const input = text.toLowerCase();
 
-    // =========================
-    // 🏪 STORE SELECTION
-    // =========================
-    if (!getSeller(from)) {
+      // =========================
+      // 🏪 STORE SELECTION
+      // =========================
+      if (!getSeller(from)) {
 
-      // Greeting → show stores
-      if (["hi", "hello"].includes(input)) {
+        // Greeting → show stores
+        if (["hi", "hello"].includes(input)) {
+          const storeList = Object.values(sellers)
+            .map(s => `• ${s.name}`)
+            .join("\n");
+
+          return await sendMessage(
+            from,
+            `Welcome 👋\nChoose a store:\n${storeList}`
+          );
+        }
+
+        // Try match store
+        const sellerKey = Object.keys(sellers).find(key => {
+          const seller = sellers[key];
+
+          return (
+            key.toLowerCase() === input ||
+            seller.name.toLowerCase().includes(input)
+          );
+        });
+
+        // If found → set seller
+        if (sellerKey) {
+          setSeller(from, sellerKey);
+
+          return await sendMessage(
+            from,
+            `Welcome to ${sellers[sellerKey].name} 😎`
+          );
+        }
+
+        // Not found → show stores again
         const storeList = Object.values(sellers)
           .map(s => `• ${s.name}`)
           .join("\n");
 
         return await sendMessage(
           from,
-          `Welcome 👋\nChoose a store:\n${storeList}`
+          `Type a store name:\n${storeList}`
         );
       }
 
-      // Try match store
-      const sellerKey = Object.keys(sellers).find(key => {
-        const seller = sellers[key];
+      // =========================
+      // 🤖 NORMAL BOT FLOW
+      // =========================
 
-        return (
-          key.toLowerCase() === input ||
-          seller.name.toLowerCase().includes(input)
-        );
-      });
+      const sellerId = getSeller(from);
+      const seller = sellers[sellerId];
 
-      // If found → set seller
-      if (sellerKey) {
-        setSeller(from, sellerKey);
+      let reply = null;
 
-        return await sendMessage(
-          from,
-          `Welcome to ${sellers[sellerKey].name} 😎`
-        );
+      // Cancel follow-up if user replies
+      cancelFollowUp(from);
+
+      // Menu
+      reply = handleMenu(text, seller);
+
+      // Intent
+      if (!reply) {
+        const intent = detectIntent(text);
+
+        if (intent === "BUY") {
+          reply = "🔥 Nice choice! What product are you interested in?";
+          scheduleFollowUp(from, "our products");
+        }
+
+        if (intent === "PRICE") {
+          reply = "💰 Sure! Which product do you want the price for?";
+        }
       }
 
-      // Not found → show stores again
-      const storeList = Object.values(sellers)
-        .map(s => `• ${s.name}`)
-        .join("\n");
-
-      return await sendMessage(
-        from,
-        `Type a store name:\n${storeList}`
-      );
-    }
-
-    // =========================
-    // 🤖 NORMAL BOT FLOW
-    // =========================
-
-    const sellerId = getSeller(from);
-    const seller = sellers[sellerId];
-
-    let reply = null;
-
-    // Cancel follow-up if user replies
-    cancelFollowUp(from);
-
-    // Menu
-    reply = handleMenu(text, seller);
-
-    // Intent
-    if (!reply) {
-      const intent = detectIntent(text);
-
-      if (intent === "BUY") {
-        reply = "🔥 Nice choice! What product are you interested in?";
-        scheduleFollowUp(from, "our products");
+      // AI fallback
+      if (!reply) {
+        reply = await aiReply(text, seller);
       }
 
-      if (intent === "PRICE") {
-        reply = "💰 Sure! Which product do you want the price for?";
-      }
+      await sendMessage(from, reply, getToken());
+
+    } catch (err) {
+      console.error("Webhook error:", err.response?.data || err.message);
     }
+  });
 
-    // AI fallback
-    if (!reply) {
-      reply = await aiReply(text, seller);
-    }
+  const PORT = 5000;
 
-    await sendMessage(from, reply);
+  app.listen(PORT, async () => {
+    console.log(`Server running on port ${PORT} 🚀`);
 
-  } catch (err) {
-    console.error("Webhook error:", err.response?.data || err.message);
-  }
-});
+    // 🔥 Auto-check token on startup
+    await ensureToken();
 
-const PORT = 5000;
-
-app.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT} 🚀`);
-
-  // 🔥 Auto-check token on startup
-  await ensureToken();
-
-  console.log("Current META_TOKEN:", getToken());
-});
+    console.log("Current META_TOKEN:", getToken());
+  });
