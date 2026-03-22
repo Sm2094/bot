@@ -15,15 +15,21 @@ const { setSeller, getSeller } = require("./memory/customerMemory.js");
 const refreshToken = require("./refreshToken");
 
 
+  // 🔥 GLOBAL TOKEN (SAFE)
+let META_TOKEN = process.env.META_TOKEN;
+
+// 🔐 Ensure token
 async function ensureToken() {
   try {
-    if (!process.env.META_TOKEN || process.env.META_TOKEN.length < 50) {
+    if (!META_TOKEN || META_TOKEN.length < 50) {
       console.log("⚠️ No valid META_TOKEN, refreshing...");
       const newToken = await refreshToken();
 
       if (newToken) {
-        process.env.META_TOKEN = newToken;
+        META_TOKEN = newToken;
         console.log("✅ Token refreshed on startup");
+      } else {
+        console.log("❌ Failed to refresh token — using fallback if exists");
       }
     } else {
       console.log("✅ META_TOKEN exists");
@@ -32,6 +38,23 @@ async function ensureToken() {
     console.error("❌ Token check failed:", err.message);
   }
 }
+
+// 🔁 Auto refresh (every ~50 days)
+setInterval(async () => {
+  try {
+    console.log("🔄 Auto refreshing token...");
+    const newToken = await refreshToken();
+    if (newToken) {
+      META_TOKEN = newToken;
+      console.log("✅ Token auto-refreshed");
+    }
+  } catch (err) {
+    console.error("❌ Auto refresh failed:", err.message);
+  }
+}, 1000 * 60 * 60 * 24 * 50);
+
+// 👉 EXPORT THIS IF sendMessage NEEDS TOKEN
+module.exports.getToken = () => META_TOKEN;
 
 const app = express();
 app.use(express.json());
