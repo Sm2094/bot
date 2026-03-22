@@ -8,9 +8,7 @@ const axios = require("axios");
  * @param {string} token - current long-lived token
  */
 
-console.log("➡️ Sending message to:", to);
-console.log("➡️ Message body:", text);
-console.log("➡️ Using token:", token.slice(0, 10) + "...");
+
 
 
 async function sendMessage(to, text, token) {
@@ -20,6 +18,11 @@ async function sendMessage(to, text, token) {
   }
 
   try {
+
+    console.log("➡️ Sending message to:", to);
+    console.log("➡️ Message body:", text);
+    console.log("➡️ Using token:", token.slice(0, 10) + "...");
+
     const res = await axios.post(
       `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
       {
