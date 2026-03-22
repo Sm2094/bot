@@ -18,25 +18,21 @@
     // 🔥 GLOBAL TOKEN (SAFE)
   let META_TOKEN = process.env.META_TOKEN || null;
 
-  async function ensureToken() {
-    try {
-      if (!META_TOKEN || META_TOKEN.length < 50) {
-        console.log("⚠️ No valid META_TOKEN, refreshing...");
-        const newToken = await refreshToken();
-
-        if (newToken && newToken.length > 50) {
-          META_TOKEN = newToken; // store in memory
-          console.log("✅ Token stored in memory");
-        } else {
-          console.log("❌ Failed to get valid token");
-        }
-      } else {
-        console.log("✅ META_TOKEN exists in memory");
-      }
-    } catch (err) {
-      console.error("❌ Token check failed:", err.message);
+    async function ensureToken() {
+  if (!META_TOKEN || META_TOKEN.length < 50) {
+    console.log("⚠️ Refreshing META_TOKEN...");
+    const newToken = await refreshToken();
+    if (newToken && newToken.length > 50) {
+      META_TOKEN = newToken;
+      console.log("✅ META_TOKEN stored in memory:", META_TOKEN.slice(0, 10) + "...");
+    } else {
+      console.error("❌ Could not get a valid token");
     }
+  } else {
+    console.log("✅ META_TOKEN exists in memory");
   }
+}
+
 
     function getToken() {
     return META_TOKEN;
