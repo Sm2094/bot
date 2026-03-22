@@ -91,7 +91,10 @@
           messageObj.interactive?.list_reply?.title;
       }
 
+      console.log("📩 Incoming message:", messageObj);
+
       if (!text || text.trim() === "") {
+        console.log("⚠️ Message ignored: empty or unsupported type");
         return res.sendStatus(200);
       }
 
