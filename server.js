@@ -70,7 +70,7 @@
       processedMessages.add(messageId);
       setTimeout(() => processedMessages.delete(messageId), 300000);
 
-      // Extract text
+      // Extract Text
       let text = null;
 
       if (messageObj.type === "text") {
